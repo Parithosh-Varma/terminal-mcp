@@ -14,7 +14,6 @@ cd "$DIR"
 URL="${RELAY_URL:-https://terminal-mcp-relay.parithosh.workers.dev}"
 TOKEN="${RELAY_TOKEN:-$(cat "$DIR/state/relay-token" 2>/dev/null || true)}"
 PORT="${PORT:-8787}"
-ROOT="${TERMINAL_MCP_ROOT:-$DIR/workspace}"
 
 if [[ -z "$TOKEN" ]]; then
   echo "No relay token. Set RELAY_TOKEN or write it to $DIR/state/relay-token" >&2
@@ -45,8 +44,14 @@ trap cleanup INT TERM EXIT
 if curl -fsS --max-time 1 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
   echo "→ reusing MCP server already listening on :$PORT"
 else
-  echo "→ starting MCP server on :$PORT (root: $ROOT)"
-  node dist/index.js --http --port "$PORT" --json-response --root "$ROOT" &
+  if [[ -n "${TERMINAL_MCP_ROOT:-}" ]]; then
+    SERVER_ARGS=(--http --port "$PORT" --json-response --root "$TERMINAL_MCP_ROOT")
+    echo "→ starting MCP server on :$PORT (shared root: $TERMINAL_MCP_ROOT)"
+  else
+    SERVER_ARGS=(--http --port "$PORT" --json-response)
+    echo "→ starting MCP server on :$PORT (per session: sand1, sand2, …)"
+  fi
+  node dist/index.js "${SERVER_ARGS[@]}" &
   SERVER_PID=$!
 
   for _ in $(seq 1 60); do

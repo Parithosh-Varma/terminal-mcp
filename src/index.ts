@@ -6,7 +6,15 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express, { type NextFunction, type Request, type Response } from "express";
 import { config, ensureDirs, parseArgs } from "./config.js";
 import { osSandboxStatus } from "./lib/osSandbox.js";
-import { initSandbox, sandboxRoot } from "./lib/sandbox.js";
+import { sandboxRoot } from "./lib/sandbox.js";
+import {
+  type SandboxSession,
+  bindSession,
+  createSession,
+  listSandboxes,
+  runInSession,
+  setSingleSession,
+} from "./lib/session.js";
 import { createServer, SERVER_NAME, SERVER_VERSION, toolCount } from "./server.js";
 
 const HELP = `${SERVER_NAME} v${SERVER_VERSION} — sandboxed terminal MCP server
@@ -16,7 +24,8 @@ Usage:
   terminal-mcp --http [options]          serve MCP over streamable HTTP at /mcp
 
 Core options:
-  --root <dir>          workspace the agent is confined to (default ./workspace)
+  --root <dir>          pin one shared workspace (disables per-session sandboxes)
+  --shared              one shared workspace instead of sand1, sand2, … per session
   --sandbox <mode>      strict | workspace | off   (default strict)
   --no-network          deny network access to sandboxed commands
   --timeout <ms>        default command timeout
@@ -46,7 +55,6 @@ async function main(): Promise<void> {
   }
 
   ensureDirs();
-  initSandbox();
 
   if (config.transport === "http") {
     await startHttp();
@@ -56,6 +64,10 @@ async function main(): Promise<void> {
 }
 
 async function startStdio(): Promise<void> {
+  // A stdio process is exactly one session, so it gets exactly one sandN folder.
+  const session = config.perSession ? createSession("stdio") : null;
+  if (session) setSingleSession(session);
+
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -63,7 +75,7 @@ async function startStdio(): Promise<void> {
   // stdout belongs to the protocol — diagnostics go to stderr only.
   const sandbox = osSandboxStatus();
   process.stderr.write(
-    `[${SERVER_NAME}] ready · ${toolCount()} tools · stdio · root=${sandboxRoot()} · mode=${config.mode}` +
+    `[${SERVER_NAME}] ready · ${toolCount()} tools · stdio · sandbox=${config.perSession ? "sand1, sand2, … (created on first use)" : sandboxRoot()} · mode=${config.mode}` +
       (sandbox.available ? ` · ${sandbox.kind}` : ` · OS sandbox unavailable (${sandbox.detail})`) +
       `\n`,
   );
@@ -115,17 +127,21 @@ async function startHttp(): Promise<void> {
       server: SERVER_NAME,
       version: SERVER_VERSION,
       tools: toolCount(),
-      root: sandboxRoot(),
+      root: config.perSession ? null : sandboxRoot(),
       mode: config.mode,
       network: config.allowNetwork,
+      perSession: config.perSession,
+      sandboxes: listSandboxes().length,
     });
   });
 
   interface Session {
     transport: StreamableHTTPServerTransport;
     server: ReturnType<typeof createServer>;
+    sandbox: SandboxSession | null;
   }
   const sessions = new Map<string, Session>();
+  let statelessSandbox: SandboxSession | null = null;
 
   const handler = async (req: Request, res: Response): Promise<void> => {
     if (!authorized(req)) {
@@ -137,7 +153,11 @@ async function startHttp(): Promise<void> {
     const existing = sessionId ? sessions.get(sessionId) : undefined;
 
     if (existing) {
-      await existing.transport.handleRequest(req, res, req.body);
+      if (existing.sandbox) {
+        await runInSession(existing.sandbox, () => existing.transport.handleRequest(req, res, req.body));
+      } else {
+        await existing.transport.handleRequest(req, res, req.body);
+      }
       return;
     }
     if (sessionId) {
@@ -145,12 +165,20 @@ async function startHttp(): Promise<void> {
       return;
     }
 
-    const server = createServer();
+    // A new MCP session — which is one new chat — gets its own sandN folder.
+    const sandbox = config.perSession
+      ? config.stateless
+        ? (statelessSandbox ??= createSession("stateless"))
+        : createSession()
+      : null;
+
+    const server = sandbox ? runInSession(sandbox, () => createServer()) : createServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: config.stateless ? undefined : () => randomUUID(),
       enableJsonResponse: config.jsonResponse,
       onsessioninitialized: (id) => {
-        sessions.set(id, { transport, server });
+        if (sandbox) bindSession(id, sandbox);
+        sessions.set(id, { transport, server, sandbox });
       },
     });
 
@@ -161,7 +189,11 @@ async function startHttp(): Promise<void> {
     };
 
     await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
+    if (sandbox) {
+      await runInSession(sandbox, () => transport.handleRequest(req, res, req.body));
+    } else {
+      await transport.handleRequest(req, res, req.body);
+    }
   };
 
   app.post("/mcp", handler);
@@ -177,7 +209,7 @@ async function startHttp(): Promise<void> {
   const sandbox = osSandboxStatus();
   process.stdout.write(
     `[${SERVER_NAME}] ready · ${toolCount()} tools · http://${config.host}:${config.port}/mcp\n` +
-      `  root:    ${sandboxRoot()}\n` +
+      `  root:    ${config.perSession ? `per session → ${config.home}/sand1, sand2, …` : sandboxRoot()}\n` +
       `  mode:    ${config.mode}${sandbox.available ? ` (${sandbox.kind})` : ` (OS sandbox unavailable: ${sandbox.detail})`}\n` +
       `  network: ${config.allowNetwork ? "allowed" : "denied"}\n` +
       `  auth:    ${config.token ? "bearer token required" : "none (loopback only)"}\n` +

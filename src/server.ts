@@ -17,8 +17,9 @@ export function createServer(): McpServer {
     { name: SERVER_NAME, version: SERVER_VERSION },
     {
       instructions: [
-        `You have access to a real terminal and filesystem, confined to the workspace at ${config.root}.`,
-        `Enforcement mode: ${config.mode}. Every file path is relative to that workspace root; absolute paths outside it are rejected.`,
+        `You have access to a real terminal and filesystem, confined to your own sandbox directory (sand1, sand2, … — one per session).`,
+        `Call sandbox_info to see its absolute path.`,
+        `Enforcement mode: ${config.mode}. Every file path is relative to that sandbox root; absolute paths outside it are rejected.`,
         ``,
         `Typical workflow:`,
         `1. list_directory or tree to orient yourself.`,

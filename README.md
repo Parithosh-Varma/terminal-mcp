@@ -8,7 +8,7 @@ command is confined to a workspace folder — the model gets a real terminal wit
 
 ```
 ┌──────────────┐   MCP    ┌────────────────┐   sandbox-exec    ┌─────────────────────┐
-│ Claude / GPT │ ───────► │  terminal-mcp  │ ────────────────► │  ./workspace/       │
+│ Claude / GPT │ ───────► │  terminal-mcp  │ ────────────────► │  sand1, sand2, …    │
 └──────────────┘ stdio/http└────────────────┘  (kernel profile) └─────────────────────┘
 ```
 
@@ -46,12 +46,41 @@ Everything the server creates stays inside this folder:
 ```
 terminal-mcp/
 ├── src/  dist/  worker/  bin/  scripts/      code
-├── workspace/                               sandbox root — the only place commands can touch
-└── state/                                   audit.log, relay-token (gitignored, never committed)
+├── sand1/  sand2/  sand3/  …                 one sandbox per session
+├── workspace/                               only used with --shared
+└── state/                                   audit.log, relay-token, sessions.jsonl (gitignored)
 ```
 
-Both `workspace/` and `state/` are created on first run and are gitignored. Move them with
-`TERMINAL_MCP_HOME` (both), `--root` / `TERMINAL_MCP_ROOT` (workspace only) or `TERMINAL_MCP_STATE`.
+All of these are created on first run and are gitignored. Move them with `TERMINAL_MCP_HOME`
+(everything), `--root` / `TERMINAL_MCP_ROOT` (pin a single shared workspace) or `TERMINAL_MCP_STATE`.
+
+---
+
+## One sandbox per session
+
+Every time a client opens a new MCP session — a new chat, a new app launch, a reconnect — the server
+creates the next free directory next to the code. Nothing is created just for connecting — a health
+check or `tools/list` leaves no folder behind, so `sandN` really means "this session did real work":
+
+```
+sand1/   ← first session
+sand2/   ← second session
+sand3/   ← third session
+```
+
+A session cannot see, read or write another session's files; the path jail treats `../sand2` as an
+escape and refuses it. Each `sandN` is a full independent workspace, so parallel chats never fight over
+the same files or the same git repo.
+
+```bash
+ls -d sand*                 # see every session's folder
+rm -rf sand3                # delete one you are done with
+terminal-mcp --shared       # opt out: one shared ./workspace for everything
+terminal-mcp --root ~/code  # pin any folder instead
+```
+
+`state/sessions.jsonl` records which `sandN` belonged to which MCP session id and when it was created,
+and `sandbox_info` reports the current session's folder plus the full list.
 
 ---
 
@@ -60,7 +89,7 @@ Both `workspace/` and `state/` are created on first run and are gitignored. Move
 ### Claude Code
 
 ```bash
-claude mcp add terminal-mcp -- node "$(pwd)/dist/index.js" --root "$(pwd)/workspace"
+claude mcp add terminal-mcp -- node "$(pwd)/dist/index.js"
 claude mcp list
 ```
 
@@ -74,9 +103,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "terminal": {
       "command": "node",
       "args": [
-        "/Users/you/terminal-mcp/dist/index.js",
-        "--root",
-        "/Users/you/terminal-mcp/workspace"
+        "/Users/you/terminal-mcp/dist/index.js"
       ]
     }
   }
@@ -261,7 +288,8 @@ node dist/index.js --root ./workspace --sandbox workspace
 ```
 terminal-mcp [--stdio] [--http] [options]
 
-  --root <dir>        workspace to confine the agent to   (default ./workspace)
+  --root <dir>        pin one shared workspace            (default: sand1, sand2, … per session)
+  --shared            one shared ./workspace instead of per-session sandboxes
   --sandbox <mode>    strict | workspace | off            (default strict)
   --no-network        deny network to sandboxed commands
   --timeout <ms>      default command timeout             (default 120000)

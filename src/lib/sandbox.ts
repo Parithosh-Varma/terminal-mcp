@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
+import { currentRoot, currentSession } from "./session.js";
 
 export class SandboxViolation extends Error {
   constructor(message: string) {
@@ -9,18 +10,27 @@ export class SandboxViolation extends Error {
   }
 }
 
-let realRoot = "";
+const realRoots = new Map<string, string>();
 
-/** Resolve the sandbox root (following symlinks) once at startup. */
-export function initSandbox(): string {
-  fs.mkdirSync(config.root, { recursive: true });
-  realRoot = fs.realpathSync.native(config.root);
-  return realRoot;
+/** Resolve the active session root (following symlinks), cached per directory. */
+export function sandboxRoot(): string {
+  const dir = currentRoot();
+  const cached = realRoots.get(dir);
+  if (cached) return cached;
+
+  fs.mkdirSync(dir, { recursive: true });
+  const real = fs.realpathSync.native(dir);
+  realRoots.set(dir, real);
+  return real;
 }
 
-export function sandboxRoot(): string {
-  if (!realRoot) initSandbox();
-  return realRoot;
+export function initSandbox(): string {
+  return sandboxRoot();
+}
+
+/** The session's short name, e.g. "sand3". */
+export function sandboxLabel(): string {
+  return currentSession()?.label ?? path.basename(sandboxRoot());
 }
 
 export function isInside(root: string, candidate: string): boolean {
@@ -35,7 +45,7 @@ export function isInside(root: string, candidate: string): boolean {
 export function resolveInside(input?: string): string {
   if (config.mode === "off") {
     const raw = (input ?? "").trim() || ".";
-    return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(config.root, raw);
+    return path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(currentRoot(), raw);
   }
 
   const root = sandboxRoot();

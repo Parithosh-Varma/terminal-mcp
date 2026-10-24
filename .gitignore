@@ -6,4 +6,5 @@ dist/
 
 # Everything the server creates for you
 workspace/
+sand*/
 state/

@@ -8,7 +8,8 @@ import { clearAudit, readAudit } from "../lib/audit.js";
 import { runShell } from "../lib/exec.js";
 import { guard, ok } from "../lib/format.js";
 import { osSandboxStatus } from "../lib/osSandbox.js";
-import { resolveInside, sandboxRoot, toRelative } from "../lib/sandbox.js";
+import { resolveInside, sandboxLabel, sandboxRoot, toRelative } from "../lib/sandbox.js";
+import { listSandboxes } from "../lib/session.js";
 import { which } from "../lib/which.js";
 
 export function registerMetaTools(server: McpServer): void {
@@ -29,6 +30,8 @@ export function registerMetaTools(server: McpServer): void {
         return ok(
           [
             `workspace root:   ${sandboxRoot()}`,
+            `session sandbox:  ${sandboxLabel()}`,
+            `all sandboxes:    ${listSandboxes().map((s) => s.label).join(", ") || "(none)"}`,
             `enforcement:      ${config.mode}`,
             `os sandbox:       ${status.available ? `${status.kind} (${status.detail})` : `off — ${status.detail}`}`,
             `network:          ${config.allowNetwork ? "allowed" : "denied"}`,
