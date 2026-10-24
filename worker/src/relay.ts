@@ -14,6 +14,13 @@ interface Pending {
 
 const REQUEST_TIMEOUT_MS = 120_000;
 const AGENT_TAG = "agent";
+// WebSocket.OPEN is not guaranteed to exist as a static in workerd; the spec
+// value for "open" is 1.
+const WS_OPEN = 1;
+// The agent pings every 25s. A socket that has not spoken for this long is a
+// zombie: the TCP peer is gone but the runtime still reports it as open, and
+// sending to it silently drops the request.
+const LIVE_WINDOW_MS = 90_000;
 
 /**
  * Single Durable Object instance that owns the outbound WebSocket to the Mac.
@@ -26,6 +33,38 @@ export class Relay implements DurableObject {
   private agentVersion = "";
 
   constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {}
+
+  /** Record liveness on the socket itself so it survives DO hibernation. */
+  private touch(ws: WebSocket, version?: string): void {
+    try {
+      const prev = (ws.deserializeAttachment() ?? {}) as {
+        lastSeen?: number;
+        since?: number;
+        version?: string;
+      };
+      ws.serializeAttachment({
+        lastSeen: Date.now(),
+        since: prev.since ?? Date.now(),
+        version: version ?? prev.version,
+      });
+    } catch {
+      /* socket already closing */
+    }
+  }
+
+  /** Open sockets that have sent something recently. Zombies are excluded. */
+  private liveAgentSockets(): WebSocket[] {
+    const now = Date.now();
+    return this.ctx.getWebSockets(AGENT_TAG).filter((ws) => {
+      if (ws.readyState !== WS_OPEN) return false;
+      try {
+        const attachment = ws.deserializeAttachment() as { lastSeen?: number } | null;
+        return !!attachment?.lastSeen && now - attachment.lastSeen < LIVE_WINDOW_MS;
+      } catch {
+        return false;
+      }
+    });
+  }
 
   async fetch(request: Request): Promise<Response> {
     const path = canonicalPath(new URL(request.url).pathname);
@@ -60,6 +99,7 @@ export class Relay implements DurableObject {
     // Hibernation-aware accept: the socket survives DO eviction.
     this.ctx.acceptWebSocket(server, [AGENT_TAG]);
     this.connectedAt = Date.now();
+    this.touch(server);
 
     const hello: WorkerMessage = {
       type: "hello",
@@ -73,6 +113,7 @@ export class Relay implements DurableObject {
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (typeof raw !== "string") return;
+    this.touch(ws);
 
     let message: { type?: string; id?: string; version?: string };
     try {
@@ -83,10 +124,18 @@ export class Relay implements DurableObject {
 
     if (message.type === "hello") {
       this.agentVersion = message.version ?? "unknown";
+      this.touch(ws, this.agentVersion);
       return;
     }
 
-    if (message.type === "pong") return;
+    if (message.type === "ping") {
+      try {
+        ws.send(JSON.stringify({ type: "pong" }));
+      } catch {
+        /* closing */
+      }
+      return;
+    }
 
     if (message.type === "response" && message.id) {
       const pending = this.pending.get(message.id);
@@ -98,7 +147,11 @@ export class Relay implements DurableObject {
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
-    this.failAll(`agent disconnected (${code} ${reason})`.trim());
+    // A superseded socket closing must not abort requests the live socket is
+    // still serving.
+    if (this.liveAgentSockets().length === 0) {
+      this.failAll(`agent disconnected (${code} ${reason})`.trim());
+    }
     try {
       ws.close(code, reason);
     } catch {
@@ -107,7 +160,7 @@ export class Relay implements DurableObject {
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
-    this.failAll("agent socket error");
+    if (this.liveAgentSockets().length === 0) this.failAll("agent socket error");
   }
 
   private failAll(reason: string): void {
@@ -159,8 +212,11 @@ export class Relay implements DurableObject {
       return new Response("method not allowed", { status: 405, headers: { allow: "POST, DELETE, OPTIONS" } });
     }
 
-    const sockets = this.ctx.getWebSockets(AGENT_TAG);
-    const ws = sockets[0];
+    // Newest *open* socket wins. getWebSockets() keeps superseded sockets in the
+    // list until they finish closing, and sending to one of those silently drops
+    // the request — the caller then hangs until the timeout.
+    const candidates = this.liveAgentSockets();
+    const ws = candidates[candidates.length - 1];
     if (!ws) {
       return jsonRpcError(503, -32000, "Local agent is not connected. Start it with: npm run relay");
     }
@@ -187,16 +243,27 @@ export class Relay implements DurableObject {
       this.pending.set(id, { resolve, timer });
     });
 
-    ws.send(
-      JSON.stringify({
-        type: "request",
-        id,
-        method: request.method,
-        path: "/mcp",
-        headers: sanitizeHeaders(request.headers),
-        body,
-      }),
-    );
+    try {
+      ws.send(
+        JSON.stringify({
+          type: "request",
+          id,
+          method: request.method,
+          path: "/mcp",
+          headers: sanitizeHeaders(request.headers),
+          body,
+        }),
+      );
+    } catch (error) {
+      const entry = this.pending.get(id);
+      if (entry) clearTimeout(entry.timer);
+      this.pending.delete(id);
+      return jsonRpcError(
+        503,
+        -32000,
+        `Local agent connection dropped (${(error as Error).message}). Retry once it reconnects.`,
+      );
+    }
 
     const response = await reply;
     const headers = new Headers(response.headers);
@@ -208,13 +275,27 @@ export class Relay implements DurableObject {
   }
 
   private handleHealth(): Response {
-    const sockets = this.ctx.getWebSockets(AGENT_TAG);
+    const sockets = this.liveAgentSockets();
+    const newest = sockets[sockets.length - 1];
+    // The DO is evicted while idle (that is the point of hibernation), so the
+    // in-memory fields may be empty even though the socket is alive.
+    let since = this.connectedAt;
+    let version = this.agentVersion;
+    if (newest) {
+      try {
+        const attachment = newest.deserializeAttachment() as { since?: number; version?: string } | null;
+        if (!since) since = attachment?.since ?? 0;
+        if (!version) version = attachment?.version ?? "";
+      } catch {
+        /* ignore */
+      }
+    }
     return new Response(
       JSON.stringify({
         online: sockets.length > 0,
         agents: sockets.length,
-        connectedSince: this.connectedAt ? new Date(this.connectedAt).toISOString() : null,
-        agentVersion: this.agentVersion || null,
+        connectedSince: since ? new Date(since).toISOString() : null,
+        agentVersion: version || null,
         pending: this.pending.size,
         server: this.env.RELAY_NAME ?? "terminal-mcp",
       }),

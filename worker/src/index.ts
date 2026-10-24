@@ -6,7 +6,7 @@ export interface Env {
   RELAY_NAME?: string;
 }
 
-import { canonicalPath, extractToken } from "./protocol.js";
+import { canonicalPath, extractToken, jsonRpcError } from "./protocol.js";
 
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -145,6 +145,16 @@ export default {
 
     if (!authorized(request, env)) return unauthorized();
 
-    return env.RELAY.get(env.RELAY.idFromName("default")).fetch(request);
+    // Never let an exception surface as a Cloudflare 1101 page: MCP clients can
+    // only act on a JSON-RPC error.
+    try {
+      return await env.RELAY.get(env.RELAY.idFromName("default")).fetch(request);
+    } catch (error) {
+      return jsonRpcError(
+        502,
+        -32000,
+        `Relay error: ${(error as Error).message ?? String(error)}`,
+      );
+    }
   },
 } satisfies ExportedHandler<Env>;

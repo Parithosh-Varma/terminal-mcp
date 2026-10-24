@@ -6,6 +6,8 @@ A sandboxed terminal, filesystem, git, network and system MCP server for **Claud
 Worker relay so ChatGPT can reach your Mac without a tunnel process. Every file path and every shell
 command is confined to a workspace folder — the model gets a real terminal without getting your whole Mac.
 
+Live status page: **https://terminal-mcp.pages.dev**
+
 ```
 ┌──────────────┐   MCP    ┌────────────────┐   sandbox-exec    ┌─────────────────────┐
 │ Claude / GPT │ ───────► │  terminal-mcp  │ ────────────────► │  sand1, sand2, …    │
@@ -164,6 +166,11 @@ RELAY_TOKEN="$(cat ./state/relay-token)" npm run relay -- --url "$(cat ./state/r
 ```
 
 Check it: `curl https://<worker>/health` → `{"online":true,...}`, and open `https://<worker>/` for a status page.
+
+Run one instance per machine. A second `terminal-mcp` detects the running supervisor and exits with
+`terminal-mcp is already running (pid …)` — two agents would otherwise keep replacing each other's
+upstream socket and every request would hang. The agent also pings every 25 s; the Worker routes to the
+newest socket that has spoken within 90 s, so a dead connection can never swallow a request.
 
 In ChatGPT: **Settings → Connectors → Advanced → Developer mode → Add custom connector**
 
@@ -377,6 +384,8 @@ bin/terminal-mcp      global launcher (`terminal-mcp`, `stdio`, `http`, `relay`)
     shell.ts files.ts search.ts git.ts net.ts system.ts data.ts meta.ts
   relay-agent.ts      Mac-side outbound agent for the Cloudflare Worker relay
 scripts/smoke.ts      end-to-end test over stdio
+site/index.html       landing page (terminal-mcp.pages.dev)
+wrangler.jsonc        Pages project config
 worker/
   src/index.ts        Worker entry: auth, landing page, routing
   src/relay.ts        Durable Object holding the WebSocket to the Mac
@@ -391,4 +400,5 @@ worker/
 | `npm install` fails with EPERM | run with `--sandbox workspace`, or add the path via `TERMINAL_MCP_WRITE_PATHS` |
 | Docker / kubectl fail | they need the host socket and full writes — use `workspace` mode for those sessions |
 | ChatGPT connector errors on session | add `--stateless` |
+| Connector hangs, `/health` shows `agents` > 1 | two agents are fighting over the socket — `pkill -f dist/relay-agent.js`, then start `terminal-mcp` once |
 | Server won't start on `0.0.0.0` | pass `--token`, or set `TERMINAL_MCP_ALLOW_INSECURE=1` |

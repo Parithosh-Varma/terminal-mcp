@@ -11,6 +11,24 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
+STATE_DIR="$DIR/state"
+LOCK="$STATE_DIR/up.pid"
+mkdir -p "$STATE_DIR"
+
+# One supervisor per machine. Two relay agents both dial the same Durable
+# Object; the Worker keeps only the newest socket, so the two processes close
+# each other out in a loop and every MCP request hangs.
+if [[ -f "$LOCK" ]]; then
+  OLD_PID="$(cat "$LOCK" 2>/dev/null || true)"
+  if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null \
+     && ps -p "$OLD_PID" -o command= 2>/dev/null | grep -q "up.sh"; then
+    echo "→ terminal-mcp is already running (pid $OLD_PID)."
+    echo "  Stop it first with: kill $OLD_PID"
+    exit 0
+  fi
+fi
+printf '%s\n' "$$" > "$LOCK"
+
 # No personal defaults baked in: the relay is configured per machine, either in
 # the environment or in files next to the code.
 URL="${RELAY_URL:-$(cat "$DIR/state/relay-url" 2>/dev/null || true)}"
@@ -39,6 +57,7 @@ cleanup() {
   [[ -n "$SERVER_PID" ]] && kill "$SERVER_PID" 2>/dev/null
   wait "$AGENT_PID" 2>/dev/null
   wait "$SERVER_PID" 2>/dev/null
+  [[ -f "$LOCK" && "$(cat "$LOCK" 2>/dev/null)" == "$$" ]] && rm -f "$LOCK"
   exit 0
 }
 trap cleanup INT TERM EXIT
