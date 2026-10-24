@@ -95,16 +95,24 @@ npx wrangler secret put RELAY_TOKEN  # paste a long random secret
 npx wrangler deploy
 ```
 
-Wrangler prints `https://terminal-mcp.<your-subdomain>.workers.dev`. Then run two processes on the Mac:
+Wrangler prints `https://terminal-mcp.<your-subdomain>.workers.dev`. Start both halves with one command:
 
 ```bash
-# terminal 1 — local MCP server, JSON responses (required by the relay)
-node dist/index.js --http --port 8787 --json-response
+npm run up
+```
 
-# terminal 2 — outbound agent, reconnects automatically
-node dist/relay-agent.js \
-  --url https://terminal-mcp.<your-subdomain>.workers.dev \
-  --token <the secret you set>
+That boots the local MCP server on `:8787` in JSON mode, waits for it to be healthy, connects the relay agent,
+and stops both on Ctrl+C. Override anything with the environment:
+
+```bash
+RELAY_URL=https://other.workers.dev PORT=9000 TERMINAL_MCP_ROOT=~/scratch npm run up
+```
+
+Equivalent to doing it by hand in two terminals:
+
+```bash
+npm run serve:json
+npm run relay -- --url https://terminal-mcp.<subdomain>.workers.dev --token "$(cat ~/.terminal-mcp/relay-token)"
 ```
 
 Check it: `curl https://<worker>/health` → `{"online":true,...}`, and open `https://<worker>/` for a status page.
