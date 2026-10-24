@@ -6,6 +6,8 @@ export interface Env {
   RELAY_NAME?: string;
 }
 
+import { canonicalPath, extractToken } from "./protocol.js";
+
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -13,29 +15,32 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function bearer(request: Request): string | null {
-  const header = request.headers.get("authorization");
-  if (!header?.toLowerCase().startsWith("bearer ")) return null;
-  return header.slice(7).trim();
-}
-
 function authorized(request: Request, env: Env): boolean {
   // Fail closed: a relay without a shared secret would be an open shell.
   if (!env.RELAY_TOKEN) return false;
-  const url = new URL(request.url);
-  const provided = url.searchParams.get("token") ?? bearer(request);
+  const provided = extractToken(request, new URL(request.url));
   return !!provided && timingSafeEqual(provided, env.RELAY_TOKEN);
 }
 
 function unauthorized(): Response {
   return new Response(
-    JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" }, id: null }),
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: {
+        code: -32001,
+        message:
+          "Unauthorized. Provide the relay token as ?token=…, an Authorization: Bearer header, " +
+          "an X-API-Key header, or in the path: /t/<token>/mcp",
+      },
+      id: null,
+    }),
     {
       status: 401,
       headers: {
         "content-type": "application/json",
         "www-authenticate": 'Bearer realm="terminal-mcp"',
         "cache-control": "no-store",
+        "access-control-allow-origin": "*",
       },
     },
   );
@@ -88,7 +93,7 @@ const LANDING = `<!doctype html>
       const data = await res.json();
       document.getElementById('dot').className = 'dot' + (data.online ? ' on' : '');
       document.getElementById('state').textContent = data.online
-        ? 'connected since ' + new Date(data.connectedSince).toLocaleTimeString()
+        ? (data.connectedSince ? 'connected since ' + new Date(data.connectedSince).toLocaleTimeString() : 'connected')
         : 'offline — run the agent on your Mac';
       document.getElementById('ver').textContent = data.agentVersion || '–';
     } catch {
@@ -104,6 +109,7 @@ const LANDING = `<!doctype html>
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const path = canonicalPath(url.pathname);
 
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -112,23 +118,23 @@ export default {
           "access-control-allow-origin": "*",
           "access-control-allow-methods": "POST, GET, DELETE, OPTIONS",
           "access-control-allow-headers":
-            "Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version",
+            "Content-Type, Authorization, X-API-Key, X-Relay-Token, Mcp-Session-Id, MCP-Protocol-Version",
           "access-control-expose-headers": "Mcp-Session-Id",
         },
       });
     }
 
-    if (url.pathname === "/" && request.method === "GET") {
+    if (path === "/" && request.method === "GET") {
       return new Response(LANDING, {
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
       });
     }
 
-    if (url.pathname === "/health") {
+    if (path === "/health") {
       return env.RELAY.get(env.RELAY.idFromName("default")).fetch(request);
     }
 
-    if (url.pathname !== "/mcp" && url.pathname !== "/agent") {
+    if (path !== "/mcp" && path !== "/agent") {
       return new Response("not found\n", { status: 404 });
     }
 

@@ -211,6 +211,7 @@ function connect(): void {
 
     if (message.type === "hello") {
       log(`worker says hello (${message.version ?? "unknown"}, server ${message.server ?? "?"})`);
+      send({ type: "hello", version: "0.1.0" });
       return;
     }
     if (message.type === "request") {

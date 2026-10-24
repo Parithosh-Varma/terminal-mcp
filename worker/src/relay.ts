@@ -2,6 +2,7 @@ import type { Env } from "./index.js";
 import {
   type RelayResponse,
   type WorkerMessage,
+  canonicalPath,
   jsonRpcError,
   sanitizeHeaders,
 } from "./protocol.js";
@@ -27,11 +28,11 @@ export class Relay implements DurableObject {
   constructor(private readonly ctx: DurableObjectState, private readonly env: Env) {}
 
   async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
+    const path = canonicalPath(new URL(request.url).pathname);
 
-    if (url.pathname === "/agent") return this.handleAgent(request);
-    if (url.pathname === "/health") return this.handleHealth();
-    if (url.pathname === "/mcp") return this.handleMcp(request);
+    if (path === "/agent") return this.handleAgent(request);
+    if (path === "/health") return this.handleHealth();
+    if (path === "/mcp") return this.handleMcp(request);
 
     return new Response("not found", { status: 404 });
   }
