@@ -40,6 +40,7 @@ export const config = {
   mode,
   allowNetwork: !(hasFlag("no-network") || process.env.TERMINAL_MCP_NETWORK === "0"),
   stateless: hasFlag("stateless"),
+  jsonResponse: hasFlag("json-response") || process.env.TERMINAL_MCP_JSON_RESPONSE === "1",
   extraReadPaths: splitList(process.env.TERMINAL_MCP_READ_PATHS),
   extraWritePaths: splitList(process.env.TERMINAL_MCP_WRITE_PATHS),
   host: arg("host") ?? process.env.TERMINAL_MCP_HOST ?? "127.0.0.1",

@@ -2,7 +2,8 @@
 
 A sandboxed terminal, filesystem, git, network and system MCP server for **Claude** and **ChatGPT**.
 
-67 tools, one workspace root, two transports (`stdio` and streamable HTTP). Every file path and every shell
+67 tools, one workspace root, two transports (`stdio` and streamable HTTP), plus an optional Cloudflare
+Worker relay so ChatGPT can reach your Mac without a tunnel process. Every file path and every shell
 command is confined to a workspace folder — the model gets a real terminal without getting your whole Mac.
 
 ```
@@ -72,29 +73,63 @@ Restart Claude Desktop. The 67 tools appear under the tools menu.
 
 ### ChatGPT (custom connector)
 
-ChatGPT needs a public HTTPS URL, so run the HTTP transport and expose it through a tunnel:
+ChatGPT needs a public HTTPS URL. There are two ways to give it one — a permanent Worker relay (no domain,
+no tunnel process) or a quick tunnel for testing.
 
-```bash
-# terminal 1
-node dist/index.js --http --port 8787 --token super-secret-token
+#### Option A — Cloudflare Worker relay (recommended, permanent)
 
-# terminal 2
-cloudflared tunnel --url http://127.0.0.1:8787
-# or: ngrok http 8787
+A Worker holds one outbound WebSocket to your Mac and forwards each MCP request down it. No inbound ports,
+no `cloudflared`, no domain. URL stays the same across restarts.
+
+```
+ChatGPT ──https──► Worker (/mcp) ◄──wss── relay-agent (Mac) ──► 127.0.0.1:8787
 ```
 
-Then in ChatGPT: **Settings → Connectors → Advanced → Developer mode → Add custom connector**
+Deploy once:
+
+```bash
+cd worker
+npm install
+npx wrangler login                 # opens the browser
+npx wrangler secret put RELAY_TOKEN  # paste a long random secret
+npx wrangler deploy
+```
+
+Wrangler prints `https://terminal-mcp.<your-subdomain>.workers.dev`. Then run two processes on the Mac:
+
+```bash
+# terminal 1 — local MCP server, JSON responses (required by the relay)
+node dist/index.js --http --port 8787 --json-response
+
+# terminal 2 — outbound agent, reconnects automatically
+node dist/relay-agent.js \
+  --url https://terminal-mcp.<your-subdomain>.workers.dev \
+  --token <the secret you set>
+```
+
+Check it: `curl https://<worker>/health` → `{"online":true,...}`, and open `https://<worker>/` for a status page.
+
+In ChatGPT: **Settings → Connectors → Advanced → Developer mode → Add custom connector**
 
 | Field | Value |
 |---|---|
 | Name | `terminal` |
-| URL | `https://<your-tunnel-host>/mcp?token=super-secret-token` |
-| Authentication | None (the token is in the URL) |
+| URL | `https://terminal-mcp.<subdomain>.workers.dev/mcp?token=<secret>` |
+| Authentication | None (token is in the URL) |
 
-ChatGPT's UI does not support static bearer headers, which is why the token can also be passed as `?token=`.
-If your connector keeps dropping the session, add `--stateless`.
+If the connector drops sessions, add `--stateless` to the local server.
 
-> The tunnel URL is a credential. Anyone with it can run commands in the workspace. Kill the tunnel when done.
+#### Option B — Quick tunnel (temporary)
+
+```bash
+node dist/index.js --http --port 8787 --token super-secret-token
+cloudflared tunnel --url http://127.0.0.1:8787   # random trycloudflare.com URL, dies with the process
+```
+
+Use the printed `https://<random>.trycloudflare.com/mcp?token=super-secret-token` as the connector URL.
+For a stable hostname, create a **named** tunnel instead (`cloudflared tunnel create` + DNS route + service).
+
+> The URL is a credential. Anyone with it can run commands in the workspace.
 
 ---
 
@@ -209,6 +244,7 @@ terminal-mcp [--stdio] [--http] [options]
   --port <port>       HTTP port                           (default 8787)
   --token <secret>    require Bearer auth
   --stateless         no session tracking (hosted connectors)
+  --json-response     answer with JSON instead of SSE (needed behind the CF relay)
 
   --help, --version
 ```
@@ -237,6 +273,12 @@ validated arguments and no user-controlled shell string.
 Recommended posture: keep `strict`, keep the workspace a folder you don't mind losing, and review
 `command_history` after a long session.
 
+**Exposing it to ChatGPT.** The Worker relay authenticates with a shared `RELAY_TOKEN` and only forwards
+`/mcp`; the local server should stay bound to `127.0.0.1` so the agent is the only client. Treat the
+connector URL (`…/mcp?token=…`) as the password it is: rotate the secret with
+`wrangler secret put RELAY_TOKEN` and restart the agent. If you want a second layer, put Cloudflare Access
+in front of the Worker and add a service token bypass for the `/mcp` path.
+
 ---
 
 ## Layout
@@ -255,7 +297,12 @@ src/
     audit.ts          JSONL audit log
   tools/
     shell.ts files.ts search.ts git.ts net.ts system.ts data.ts meta.ts
+  relay-agent.ts      Mac-side outbound agent for the Cloudflare Worker relay
 scripts/smoke.ts      end-to-end test over stdio
+worker/
+  src/index.ts        Worker entry: auth, landing page, routing
+  src/relay.ts        Durable Object holding the WebSocket to the Mac
+  src/protocol.ts     wire protocol between Worker and agent
 ```
 
 ## Troubleshooting

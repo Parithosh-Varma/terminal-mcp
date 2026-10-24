@@ -1,0 +1,22 @@
+name = "terminal-mcp-relay"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# One Durable Object instance ("default") owns the single WebSocket to your Mac.
+[durable_objects]
+bindings = [
+  { name = "RELAY", class_name = "Relay" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Relay"]
+
+[vars]
+# Public diagnostics page + tool names; no secrets here.
+RELAY_NAME = "terminal-mcp"
+
+# Set the shared secret with:
+#   wrangler secret put RELAY_TOKEN
+# For local development, create .dev.vars containing:
+#   RELAY_TOKEN=dev-only-not-a-real-secret

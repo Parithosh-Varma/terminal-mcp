@@ -26,6 +26,7 @@ HTTP options:
   --port <port>         port (default 8787)
   --token <secret>      require Bearer auth (or TERMINAL_MCP_TOKEN)
   --stateless           no session tracking (simplest for hosted connectors)
+  --json-response       answer with application/json instead of SSE (required behind the CF relay)
 
 Examples:
   terminal-mcp --root ~/code/sandbox
@@ -147,6 +148,7 @@ async function startHttp(): Promise<void> {
     const server = createServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: config.stateless ? undefined : () => randomUUID(),
+      enableJsonResponse: config.jsonResponse,
       onsessioninitialized: (id) => {
         sessions.set(id, { transport, server });
       },
@@ -178,7 +180,8 @@ async function startHttp(): Promise<void> {
       `  root:    ${sandboxRoot()}\n` +
       `  mode:    ${config.mode}${sandbox.available ? ` (${sandbox.kind})` : ` (OS sandbox unavailable: ${sandbox.detail})`}\n` +
       `  network: ${config.allowNetwork ? "allowed" : "denied"}\n` +
-      `  auth:    ${config.token ? "bearer token required" : "none (loopback only)"}\n`,
+      `  auth:    ${config.token ? "bearer token required" : "none (loopback only)"}\n` +
+      `  format:  ${config.jsonResponse ? "json" : "sse"}\n`,
   );
 
   const shutdown = async () => {

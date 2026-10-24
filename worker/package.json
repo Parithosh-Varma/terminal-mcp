@@ -1,0 +1,17 @@
+{
+  "name": "terminal-mcp-relay",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker relay that bridges ChatGPT to a local terminal-mcp instance",
+  "scripts": {
+    "dev": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261024.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.149.0"
+  }
+}

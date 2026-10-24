@@ -12,6 +12,10 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "smoke": "tsx scripts/smoke.ts",
+    "relay": "node dist/relay-agent.js",
+    "serve:json": "node dist/index.js --http --port 8787 --json-response",
+    "worker:dev": "npm --prefix worker run dev",
+    "worker:deploy": "npm --prefix worker run deploy",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
