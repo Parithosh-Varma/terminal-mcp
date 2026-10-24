@@ -22,7 +22,10 @@
     "serve:json": "node dist/index.js --http --port 8787 --json-response",
     "worker:dev": "npm --prefix worker run dev",
     "worker:deploy": "npm --prefix worker run deploy",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "pages:deploy": "wrangler pages deploy site --project-name terminal-mcp --branch main",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
   },
   "engines": {
     "node": ">=20"
@@ -36,6 +39,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^24.10.1",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "^4.152.0"
   }
 }

@@ -131,7 +131,12 @@ export default {
     }
 
     if (path === "/health") {
-      return env.RELAY.get(env.RELAY.idFromName("default")).fetch(request);
+      const response = await env.RELAY.get(env.RELAY.idFromName("default")).fetch(request);
+      // Public status page lives on another origin (terminal-mcp.pages.dev).
+      const headers = new Headers(response.headers);
+      headers.set("access-control-allow-origin", "*");
+      headers.set("cache-control", "no-store");
+      return new Response(response.body, { status: response.status, headers });
     }
 
     if (path !== "/mcp" && path !== "/agent") {
