@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { config } from "../config.js";
+import { scrubEnv } from "./env.js";
 import { wrapArgv } from "./osSandbox.js";
 import { resolveDir, sandboxEnv, toRelative } from "./sandbox.js";
 
@@ -29,9 +30,10 @@ export function startManaged(
   const shell = process.env.SHELL && process.env.SHELL.startsWith("/") ? process.env.SHELL : "/bin/sh";
   const wrapped = wrapArgv(shell, ["-c", command], cwd);
 
+  const { env: baseEnv } = scrubEnv(process.env);
   const child = spawn(wrapped.file, wrapped.args, {
     cwd,
-    env: { ...process.env, ...sandboxEnv(), TERM: process.env.TERM ?? "xterm-256color" },
+    env: { ...baseEnv, ...sandboxEnv(), TERM: process.env.TERM ?? "xterm-256color" },
     stdio: ["pipe", "pipe", "pipe"],
     detached: process.platform !== "win32",
   });

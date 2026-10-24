@@ -12,6 +12,10 @@ const childEnv = Object.fromEntries(
   Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
 );
 
+// Planted so the smoke test can prove they never reach a sandboxed command.
+childEnv.CLOUDFLARE_API_TOKEN = "cfat_smoke_leak_me";
+childEnv.MY_APP_SECRET = "leak-me";
+
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [path.resolve("dist/index.js"), "--root", root],
@@ -150,6 +154,16 @@ async function main(): Promise<void> {
   } else {
     console.log("  SKIP  git tools (git unavailable)");
   }
+
+  // --- environment ---
+  const envProbe = await call("run_command", {
+    command: `printf '%s|%s' "\${CLOUDFLARE_API_TOKEN:-<unset>}" "\${MY_APP_SECRET:-<unset>}"`,
+  });
+  check(
+    "credential env vars are scrubbed",
+    envProbe.text.includes("<unset>|<unset>"),
+    envProbe.text,
+  );
 
   // --- meta ---
   const sandboxInfo = await call("sandbox_info", {});

@@ -110,15 +110,20 @@ ${config.allowNetwork ? "(allow network*)" : "(deny network*)"}
 `;
 }
 
-let profilePath: string | undefined;
+// One profile per sandbox root. A single cached profile breaks every session
+// after the first: writes land outside the only allowed path and macOS answers
+// "Operation not permitted" even for files inside the sandbox.
+const profiles = new Map<string, string>();
 
 function macProfileFile(): string {
-  if (profilePath && fs.existsSync(profilePath)) return profilePath;
   const root = sandboxRoot();
+  const cached = profiles.get(root);
+  if (cached && fs.existsSync(cached)) return cached;
+
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "terminal-mcp-"));
   const file = path.join(dir, "sandbox.sb");
   fs.writeFileSync(file, sandboxProfile(root), { mode: 0o600 });
-  profilePath = file;
+  profiles.set(root, file);
   return file;
 }
 

@@ -22,7 +22,11 @@ function summarise(result: ExecResult, title?: string): string {
 
 async function git(args: string[], cwd?: string, timeoutMs = 60_000): Promise<ExecResult> {
   const dir = resolveDir(cwd ?? ".");
-  return runCommand("git", args, { cwd: dir, timeoutMs });
+  // Git has no global --no-color option; passing it per subcommand breaks the
+  // ones that don't define it (git clone rejects it outright). Disable colour
+  // through config instead, which every command honours.
+  const clean = args.filter((arg) => arg !== "--no-color");
+  return runCommand("git", ["-c", "color.ui=false", ...clean], { cwd: dir, timeoutMs });
 }
 
 export function registerGitTools(server: McpServer): void {

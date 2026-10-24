@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { config } from "../config.js";
+import { scrubEnv } from "./env.js";
 import { formatError } from "./format.js";
 import { wrapArgv } from "./osSandbox.js";
 import { resolveDir, sandboxEnv } from "./sandbox.js";
@@ -69,10 +70,13 @@ export async function runCommand(
 
   const wrapped = opts.host ? { file, args } : wrapArgv(file, args, cwd);
 
+  // Credential-bearing variables never reach the child process.
+  const { env: baseEnv } = scrubEnv(process.env);
+
   const child = spawn(wrapped.file, wrapped.args, {
     cwd,
     env: {
-      ...process.env,
+      ...baseEnv,
       ...sandboxEnv(),
       ...(opts.env ?? {}),
       TERM: process.env.TERM ?? "xterm-256color",

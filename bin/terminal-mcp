@@ -40,10 +40,11 @@ Any unrecognised flags are passed straight to the server, e.g.
   terminal-mcp relay --url https://relay.example.workers.dev
 
 Environment used by `terminal-mcp`:
-  RELAY_URL         worker base URL (default the deployed relay)
+  RELAY_URL         worker base URL (default ./state/relay-url; unset = local only)
   RELAY_TOKEN       relay secret (default ./state/relay-token)
   PORT              local HTTP port (default 8787)
   TERMINAL_MCP_ROOT pin one shared workspace instead of sand1, sand2, … per session
+  TERMINAL_MCP_PASS_ENV  comma-separated credential env vars to un-scrub, e.g. SSH_AUTH_SOCK
 EOF
 }
 

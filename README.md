@@ -48,7 +48,7 @@ terminal-mcp/
 ├── src/  dist/  worker/  bin/  scripts/      code
 ├── sand1/  sand2/  sand3/  …                 one sandbox per session
 ├── workspace/                               only used with --shared
-└── state/                                   audit.log, relay-token, sessions.jsonl (gitignored)
+└── state/                                   audit.log, relay-url, relay-token, sessions.jsonl (gitignored)
 ```
 
 All of these are created on first run and are gitignored. Move them with `TERMINAL_MCP_HOME`
@@ -140,14 +140,17 @@ npx wrangler secret put RELAY_TOKEN  # paste a long random secret
 npx wrangler deploy
 ```
 
-Wrangler prints `https://terminal-mcp.<your-subdomain>.workers.dev`. Start both halves with one command:
+Wrangler prints `https://terminal-mcp.<your-subdomain>.workers.dev`. Save it once, then start both halves:
 
 ```bash
+echo "https://terminal-mcp.<your-subdomain>.workers.dev" > state/relay-url
+echo "<the same secret you gave wrangler>" > state/relay-token && chmod 600 state/relay-token
 terminal-mcp
 ```
 
-That boots the local MCP server on `:8787` in JSON mode, waits for it to be healthy, connects the relay agent,
-and stops both on Ctrl+C. Override anything with the environment:
+Nothing relay-specific is hardcoded in the repo: `terminal-mcp` reads `state/relay-url` (or `RELAY_URL`)
+and `state/relay-token` (or `RELAY_TOKEN`). With no URL configured it runs the local server only.
+Override anything with the environment:
 
 ```bash
 RELAY_URL=https://other.workers.dev PORT=9000 TERMINAL_MCP_ROOT=~/scratch terminal-mcp
@@ -157,7 +160,7 @@ Equivalent to doing it by hand in two terminals:
 
 ```bash
 npm run serve:json
-npm run relay -- --url https://terminal-mcp.<subdomain>.workers.dev --token "$(cat ./state/relay-token)"
+RELAY_TOKEN="$(cat ./state/relay-token)" npm run relay -- --url "$(cat ./state/relay-url)"
 ```
 
 Check it: `curl https://<worker>/health` → `{"online":true,...}`, and open `https://<worker>/` for a status page.
@@ -188,7 +191,7 @@ For a stable hostname, create a **named** tunnel instead (`cloudflared tunnel cr
 
 ## The sandbox
 
-Two independent layers, both on by default.
+Three independent layers, all on by default.
 
 **1. Path jail (always on).** Every path argument is resolved against the workspace root, symlinks are
 resolved to their real target, and anything landing outside the root is rejected:
@@ -219,6 +222,24 @@ PASS  npm install works inside sandbox
 
 Environment inside the sandbox is redirected so tools stay contained: `TMPDIR`, `XDG_CACHE_HOME` and
 `npm_config_cache` point into the workspace.
+
+**3. Environment scrubbing (always on).** Anything that looks like a credential is dropped before the
+child process starts, so `env`, `printenv` and friends cannot see it:
+
+```
+CLOUDFLARE_API_TOKEN, AWS_*, OPENAI_*, ANTHROPIC_*, GITHUB_TOKEN, GH_*, NPM_TOKEN,
+SSH_AUTH_SOCK, anything matching *_TOKEN, *_KEY, *_SECRET, *_PASSWORD, *AUTH*, *COOKIE*
+```
+
+This closes the gap the kernel profile leaves open: it protects credential *files*, not credentials you
+exported in your shell. If a tool genuinely needs one, allow it by name:
+
+```bash
+TERMINAL_MCP_PASS_ENV=SSH_AUTH_SOCK,NPM_TOKEN terminal-mcp
+```
+
+Combine with `--no-network` when the model is working on untrusted input, and note that the relay token
+is passed to the agent through the environment (never argv), so it does not appear in `ps`.
 
 ### Modes
 
@@ -303,9 +324,10 @@ terminal-mcp [--stdio] [--http] [options]
   --help, --version
 ```
 
-Environment equivalents: `TERMINAL_MCP_ROOT`, `TERMINAL_MCP_SANDBOX`, `TERMINAL_MCP_NETWORK=0`,
-`TERMINAL_MCP_TIMEOUT_MS`, `TERMINAL_MCP_MAX_OUTPUT`, `TERMINAL_MCP_HOST`, `TERMINAL_MCP_PORT`,
-`TERMINAL_MCP_TOKEN`, `TERMINAL_MCP_READ_PATHS`, `TERMINAL_MCP_WRITE_PATHS`.
+Environment equivalents: `TERMINAL_MCP_HOME`, `TERMINAL_MCP_STATE`, `TERMINAL_MCP_ROOT`, `TERMINAL_MCP_SHARED=1`,
+`TERMINAL_MCP_SANDBOX`, `TERMINAL_MCP_NETWORK=0`, `TERMINAL_MCP_TIMEOUT_MS`, `TERMINAL_MCP_MAX_OUTPUT`,
+`TERMINAL_MCP_HOST`, `TERMINAL_MCP_PORT`, `TERMINAL_MCP_TOKEN`, `TERMINAL_MCP_READ_PATHS`,
+`TERMINAL_MCP_WRITE_PATHS`, `TERMINAL_MCP_PASS_ENV`.
 
 Endpoints: `POST/GET/DELETE /mcp` (MCP), `GET /health`.
 

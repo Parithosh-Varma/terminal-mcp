@@ -29,6 +29,7 @@ const aWrite = await call(a, "write_file", { path: "owner.txt", content: "sessio
 const b = await open(url);
 const bPwd = await call(b, "run_command", { command: "pwd" });
 const bList = await call(b, "list_directory", { path: "." });
+const bWrite = await call(b, "write_file", { path: "owner.txt", content: "session-b" });
 const bEscape = await call(b, "read_file", { path: "../sand1/owner.txt" });
 
 const dirA = aPwd.text.split("\n").pop() ?? "";
@@ -43,6 +44,7 @@ const rows: Array<[string, boolean, string]> = [
   ["A's file is not visible in B", emptyB, emptyB ? "(clean)" : bList.text],
   ["B cannot reach into A by path", blocked, bEscape.text.split("\n")[0] ?? ""],
   ["write in A succeeded", !aWrite.isError, aWrite.text.split("\n")[0] ?? ""],
+  ["write in B succeeded (profile follows the session)", !bWrite.isError, bWrite.text.split("\n")[0] ?? ""],
 ];
 
 for (const [name, pass, detail] of rows) {

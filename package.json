@@ -1,7 +1,12 @@
 {
   "name": "terminal-mcp",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Parithosh-Varma/terminal-mcp.git"
+  },
   "type": "module",
   "description": "Sandboxed terminal, filesystem, git and system MCP server for Claude and ChatGPT",
   "bin": {

@@ -5,12 +5,21 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { config } from "../config.js";
 import { clearAudit, readAudit } from "../lib/audit.js";
+import { scrubEnv } from "../lib/env.js";
 import { runShell } from "../lib/exec.js";
 import { guard, ok } from "../lib/format.js";
 import { osSandboxStatus } from "../lib/osSandbox.js";
 import { resolveInside, sandboxLabel, sandboxRoot, toRelative } from "../lib/sandbox.js";
 import { listSandboxes } from "../lib/session.js";
 import { which } from "../lib/which.js";
+
+function describeScrub(): string {
+  const { removed, allowed } = scrubEnv(process.env);
+  const parts = [`${removed.length} credential variable(s) withheld`];
+  if (allowed.length) parts.push(`allowed: ${allowed.join(", ")}`);
+  if (removed.length) parts.push(`[${removed.join(", ")}]`);
+  return parts.join(" ");
+}
 
 export function registerMetaTools(server: McpServer): void {
   server.registerTool(
@@ -38,6 +47,7 @@ export function registerMetaTools(server: McpServer): void {
             `command timeout:  ${Math.round(config.defaultTimeoutMs / 1000)}s (default)`,
             `output cap:       ${config.maxOutputChars.toLocaleString()} chars`,
             `audit log:        ${config.auditPath}`,
+            `env scrubbed:     ${describeScrub()}`,
             `extra read:       ${config.extraReadPaths.join(", ") || "(none)"}`,
             `extra write:      ${config.extraWritePaths.join(", ") || "(none)"}`,
             ``,
