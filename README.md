@@ -20,18 +20,24 @@ command is confined to a workspace folder — the model gets a real terminal wit
 cd terminal-mcp
 npm install
 npm run build
+npm link          # puts `terminal-mcp` on your PATH
 
-# stdio (Claude Desktop / Claude Code / Cursor)
-node dist/index.js --root ~/mcp-workspace
-
-# HTTP (ChatGPT connectors, remote clients, debugging)
-node dist/index.js --http --port 8787 --token "$(openssl rand -hex 24)"
+terminal-mcp      # start everything: sandboxed server + Cloudflare relay
 ```
 
-Verify everything works end-to-end, including the sandbox:
+Now from any directory:
 
 ```bash
-npm run smoke          # 24 checks
+terminal-mcp                 # server + relay, Ctrl+C stops both
+terminal-mcp http --port 9000
+terminal-mcp stdio           # for Claude Desktop / Code / Cursor
+terminal-mcp relay --url https://relay.example.workers.dev
+```
+
+Verify the sandbox works end-to-end:
+
+```bash
+npm run smoke               # 26 checks
 SMOKE_NPM=1 npm run smoke   # also proves npm install works inside the sandbox
 ```
 
@@ -98,14 +104,14 @@ npx wrangler deploy
 Wrangler prints `https://terminal-mcp.<your-subdomain>.workers.dev`. Start both halves with one command:
 
 ```bash
-npm run up
+terminal-mcp
 ```
 
 That boots the local MCP server on `:8787` in JSON mode, waits for it to be healthy, connects the relay agent,
 and stops both on Ctrl+C. Override anything with the environment:
 
 ```bash
-RELAY_URL=https://other.workers.dev PORT=9000 TERMINAL_MCP_ROOT=~/scratch npm run up
+RELAY_URL=https://other.workers.dev PORT=9000 TERMINAL_MCP_ROOT=~/scratch terminal-mcp
 ```
 
 Equivalent to doing it by hand in two terminals:
@@ -296,6 +302,8 @@ src/
   index.ts            CLI entry, stdio + HTTP transports
   server.ts           McpServer factory, tool registration
   config.ts           flags / env / defaults
+  relay-agent.ts      Mac-side outbound agent for the Cloudflare Worker relay
+bin/terminal-mcp      global launcher (`terminal-mcp`, `stdio`, `http`, `relay`)
   lib/
     sandbox.ts        path jail + workspace-relative resolution
     osSandbox.ts      sandbox-exec / bwrap profile generation

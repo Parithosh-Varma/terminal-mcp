@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# terminal-mcp — sandboxed terminal MCP server.
+# Resolves symlinks so it works when installed with `npm link` / `npm i -g`.
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  TARGET="$(readlink "$SOURCE")"
+  case "$TARGET" in
+    /*) SOURCE="$TARGET" ;;
+    *) SOURCE="$(cd -P "$(dirname "$SOURCE")" && pwd)/$TARGET" ;;
+  esac
+done
+DIR="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
+if [ ! -f "$DIR/dist/index.js" ]; then
+  echo "building terminal-mcp…" >&2
+  ( cd "$DIR" && npm run build >/dev/null 2>&1 ) || {
+    echo "build failed — run 'npm install && npm run build' in $DIR" >&2
+    exit 1
+  }
+fi
+
+usage() {
+  cat <<'EOF'
+terminal-mcp — a sandboxed terminal for Claude and ChatGPT
+
+Usage:
+  terminal-mcp                 start everything (local server + Cloudflare relay)
+  terminal-mcp start           same as above
+  terminal-mcp stdio           MCP over stdin/stdout (Claude Desktop / Code / Cursor)
+  terminal-mcp http [flags]    MCP over HTTP only, no relay
+  terminal-mcp relay [flags]   relay agent only
+  terminal-mcp build           rebuild dist/
+  terminal-mcp help            this message
+
+Any unrecognised flags are passed straight to the server, e.g.
+  terminal-mcp --root ~/scratch
+  terminal-mcp http --port 9000
+  terminal-mcp relay --url https://relay.example.workers.dev
+
+Environment used by `terminal-mcp`:
+  RELAY_URL         worker base URL (default the deployed relay)
+  RELAY_TOKEN       relay secret (default ~/.terminal-mcp/relay-token)
+  PORT              local HTTP port (default 8787)
+  TERMINAL_MCP_ROOT workspace to confine the agent to (default ~/mcp-workspace)
+EOF
+}
+
+if [ $# -eq 0 ]; then
+  exec bash "$DIR/scripts/up.sh"
+fi
+
+cmd="$1"
+shift
+
+case "$cmd" in
+  start|up)      exec bash "$DIR/scripts/up.sh" "$@" ;;
+  stdio)         exec node "$DIR/dist/index.js" --stdio "$@" ;;
+  http)          exec node "$DIR/dist/index.js" --http "$@" ;;
+  agent|relay)   exec node "$DIR/dist/relay-agent.js" "$@" ;;
+  build)         exec npm --prefix "$DIR" run build ;;
+  -h|--help|help) usage ;;
+  *)             exec node "$DIR/dist/index.js" "$cmd" "$@" ;;
+esac

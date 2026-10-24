@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Sandboxed terminal, filesystem, git and system MCP server for Claude and ChatGPT",
   "bin": {
-    "terminal-mcp": "dist/index.js"
+    "terminal-mcp": "bin/terminal-mcp"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
