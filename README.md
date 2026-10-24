@@ -62,7 +62,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "terminal": {
       "command": "node",
       "args": [
-        "/Users/varma/Downloads/CODING/claude agent ability/terminal-mcp/dist/index.js",
+        "/Users/you/terminal-mcp/dist/index.js",
         "--root",
         "/Users/varma/mcp-workspace"
       ]
