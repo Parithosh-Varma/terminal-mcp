@@ -1,0 +1,150 @@
+---
+import Base from "../layouts/Base.astro";
+import Terminal from "../components/Terminal.astro";
+import StatusPill from "../components/StatusPill.astro";
+import { art } from "../lib/art";
+import { groups, totalTools } from "../data/tools";
+
+const hero = art("terminal-mcp", "ANSI Shadow");
+
+const demo = [
+  { text: "terminal-mcp", kind: "cmd" as const },
+  { text: "→ MCP server on :8787 · sandbox strict · per-session roots", kind: "dim" as const },
+  { text: "→ relay agent connected", kind: "dim" as const },
+  { text: "", kind: "out" as const },
+  { text: "run_command  python3 quicksort.py", kind: "cmd" as const },
+  { text: "exit 0 · 412ms · [7, 19, 23, 42, 85]", kind: "ok" as const },
+  { text: "git_commit -m \"fix: partition bounds\"", kind: "cmd" as const },
+  { text: "committed a1b2c3d", kind: "ok" as const },
+  { text: "read_file ../../etc/passwd", kind: "cmd" as const },
+  { text: "Path escapes the sandbox: ../../etc/passwd", kind: "err" as const },
+  { text: "env | grep CLOUDFLARE_API_TOKEN", kind: "cmd" as const },
+  { text: "scrubbed before the process ever started", kind: "err" as const },
+];
+
+const features = [
+  {
+    icon: "┌─┴─┐",
+    title: "path jail",
+    body: "Every path resolves against the workspace root. Symlinks chased, `../` escapes rejected before anything runs.",
+  },
+  {
+    icon: "⌘ exec",
+    title: "kernel sandbox",
+    body: "Commands run under sandbox-exec (macOS) or bwrap (Linux) — writes confined, ~/.ssh and ~/.aws unreadable.",
+  },
+  {
+    icon: "×_*=",
+    title: "env scrubbing",
+    body: "Anything shaped like a credential — *_TOKEN, *_KEY, *_SECRET, *AUTH* — is dropped before spawn, not masked after.",
+  },
+  {
+    icon: "sand1/",
+    title: "a folder per session",
+    body: "Each client session gets its own sand1, sand2, … visible next to the project. No shared state between chats.",
+  },
+  {
+    icon: "67 ⚒",
+    title: "67 tools",
+    body: "shell, files, search, git, network, system, data, meta — one protocol, no pager hangs, no colour codes.",
+  },
+  {
+    icon: "☁ ⇄",
+    title: "cloudflare relay",
+    body: "A Worker + Durable Object bridges hosted ChatGPT to your Mac. Your machine dials out; nothing listens inbound.",
+  },
+];
+---
+
+<Base title="a sandboxed terminal for Claude and ChatGPT">
+  <section class="hero">
+    <div class="wrap">
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:22px; animation: rise .85s .05s cubic-bezier(.2,.7,.2,1) both;">
+        <StatusPill />
+        <span class="mono-note">MIT · macOS &amp; linux · node ≥ 20</span>
+      </div>
+
+      <pre class="ascii-hero" aria-label="terminal-mcp">{hero}</pre>
+      <h1 class="hero-fallback">terminal-mcp</h1>
+
+      <p class="hero-sub">
+        A <b>sandboxed terminal, filesystem, git and system MCP server</b> for Claude and ChatGPT.
+        The model gets a real machine — you keep yours. Every command is confined to a workspace
+        folder by three independent layers, and every session gets its own.
+      </p>
+
+      <div class="cta-row">
+        <a class="btn primary" href="/relay">get started ❯</a>
+        <a class="btn" href="/tools">browse the 67 tools</a>
+        <a class="btn ghost" href="/sandbox">how the sandbox works</a>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b>{totalTools}</b><span>tools</span></div>
+        <div class="stat"><b>{groups.length}</b><span>tool groups</span></div>
+        <div class="stat"><b>3</b><span>sandbox layers</span></div>
+        <div class="stat"><b>2</b><span>transports · stdio + http</span></div>
+        <div class="stat"><b>1</b><span>command to start</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="section-sub">a session, as the model sees it</p>
+      </div>
+      <div class="reveal" style="--d:.1s">
+        <Terminal title="~/sand1 — via relay · claude" lines={demo} />
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="section-sub">why it's safe to hand over a shell</p>
+      </div>
+      <div class="cards">
+        {features.map((f, i) => (
+          <div class="card reveal" style={`--d:${(i % 3) * 0.08}s`}>
+            <span class="icon">{f.icon}</span>
+            <h3>{f.title}</h3>
+            <p set:html={f.body.replace(/`([^`]+)`/g, "<code>$1</code>")} />
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <p class="section-sub">one command, whole lifecycle</p>
+      </div>
+      <div class="grid-2">
+        <div class="reveal" style="--d:.05s">
+          <div class="term static">
+            <div class="term-bar">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="term-title">any directory — zsh</span>
+            </div>
+            <pre class="term-body">❯ terminal-mcp
+→ MCP server on :8787
+→ relay agent connected
+→ sandboxes: sand1, sand2, …</pre>
+          </div>
+        </div>
+        <div class="card reveal" style="--d:.12s">
+          <span class="icon">01</span>
+          <h3>clone, build, link</h3>
+          <p>
+            <code>git clone</code>, <code>npm install &amp;&amp; npm run build</code>,
+            <code>npm link</code> — then <code>terminal-mcp</code> from anywhere starts the local
+            server and the Cloudflare relay agent, and refuses to start twice.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

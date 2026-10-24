@@ -1,0 +1,117 @@
+---
+/**
+ * Terminal window with a typing animation (or static output).
+ *
+ *   <Terminal title="~/sand1 — zsh" lines={[...]} />
+ *   <Terminal title="smoke" static lines={[...]} />
+ *
+ * line kinds: cmd (typed, with prompt) · ok · err · out · dim
+ */
+interface Line {
+  text: string;
+  kind?: "cmd" | "ok" | "err" | "out" | "dim";
+}
+
+interface Props {
+  title?: string;
+  lines: Line[];
+  static?: boolean;
+  speed?: number;
+}
+
+const { title = "terminal", lines = [], static: isStatic = false, speed = 14 } = Astro.props;
+
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const cls = (k?: string) => (k === "ok" ? "k-ok" : k === "err" ? "k-err" : k === "out" ? "k-out" : k === "dim" ? "k-dim" : "k-out");
+---
+
+{isStatic ? (
+  <div class="term static">
+    <div class="term-bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="term-title">{title}</span>
+    </div>
+    <pre class="term-body">{lines.map((l) => `${l.kind === "cmd" ? "❯ " : l.kind === "ok" ? "✓ " : l.kind === "err" ? "✗ " : "  "}${l.text}`).join("\n")}</pre>
+  </div>
+) : (
+  <div class="term" data-terminal data-speed={speed} data-lines={JSON.stringify(lines)}>
+    <div class="term-bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="term-title">{title}</span>
+    </div>
+    <pre class="term-body" aria-label="terminal demo"></pre>
+  </div>
+)}
+
+<script>
+  interface Line {
+    text: string;
+    kind?: "cmd" | "ok" | "err" | "out" | "dim";
+  }
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  async function typeTerminal(el: HTMLElement) {
+    const body = el.querySelector<HTMLElement>(".term-body");
+    if (!body) return;
+    const lines = JSON.parse(el.dataset.lines ?? "[]") as Line[];
+    const speed = Number(el.dataset.speed ?? 14);
+    const caret = document.createElement("span");
+    caret.className = "caret";
+
+    const lineFor = (l: Line) => {
+      const row = document.createElement("span");
+      row.className = "line";
+      if (l.kind === "cmd") {
+        const p = document.createElement("span");
+        p.className = "k-prompt";
+        p.textContent = "❯ ";
+        row.append(p);
+      } else {
+        const p = document.createElement("span");
+        p.textContent = l.kind === "ok" ? "✓ " : l.kind === "err" ? "✗ " : "  ";
+        p.className = l.kind === "err" ? "k-err" : l.kind === "ok" ? "k-ok" : "k-dim";
+        row.append(p);
+      }
+      const span = document.createElement("span");
+      span.className = l.kind === "cmd" ? "k-cmd" : l.kind === "ok" ? "k-ok" : l.kind === "err" ? "k-err" : l.kind === "dim" ? "k-dim" : "k-out";
+      row.append(span, caret);
+      body.append(row);
+      return span;
+    };
+
+    for (const l of lines) {
+      const span = lineFor(l);
+      if (l.kind === "cmd") {
+        for (const ch of l.text) {
+          span.textContent += ch;
+          await sleep(speed + Math.random() * speed);
+        }
+        await sleep(240);
+      } else {
+        await sleep(90);
+        span.textContent = l.text;
+        await sleep(140);
+      }
+    }
+    caret.remove();
+  }
+
+  function initTerminals() {
+    document.querySelectorAll<HTMLElement>("[data-terminal]:not([data-started])").forEach((el) => {
+      el.dataset.started = "1";
+      const io = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            io.disconnect();
+            void typeTerminal(el);
+          }
+        },
+        { threshold: 0.25 },
+      );
+      io.observe(el);
+    });
+  }
+
+  document.addEventListener("astro:page-load", initTerminals);
+</script>

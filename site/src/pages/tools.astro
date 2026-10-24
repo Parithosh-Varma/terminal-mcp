@@ -1,0 +1,36 @@
+---
+import Base from "../layouts/Base.astro";
+import { art } from "../lib/art";
+import { groups, totalTools } from "../data/tools";
+
+const head = art("tools", "Small Slant");
+---
+
+<Base title="tools" description="All 67 terminal-mcp tools — shell, files, search, git, network, system, data and meta.">
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <pre class="ascii-h" aria-label="tools">{head}</pre>
+        <p class="section-sub">{totalTools} tools in {groups.length} groups — every one confined to the workspace</p>
+      </div>
+
+      {groups.map((g) => (
+        <div class="section" id={g.id} style="padding:30px 0">
+          <div class="section-head reveal">
+            <p class="section-sub">{g.label} — {g.tools.length} tools</p>
+            <p style="color:var(--dim); margin:8px 0 0; max-width:70ch">{g.blurb}</p>
+          </div>
+          <div class="cards">
+            {g.tools.map((t, i) => (
+              <div class="card reveal" style={`--d:${Math.min(i, 8) * 0.05}s`}>
+                <span class="icon">{g.icon}</span>
+                <h3><code style="font-size:13px">{t.name}</code></h3>
+                <p>{t.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+</Base>

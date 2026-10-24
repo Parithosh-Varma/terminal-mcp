@@ -15,3 +15,8 @@ state/
 !.dev.vars.example
 .env*
 !.env.example
+
+# astro site
+site/node_modules/
+site/dist/
+site/.astro/

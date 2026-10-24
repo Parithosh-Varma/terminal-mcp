@@ -1,0 +1,111 @@
+---
+import Base from "../layouts/Base.astro";
+import Terminal from "../components/Terminal.astro";
+import { art } from "../lib/art";
+
+const head = art("sandbox", "Small Slant");
+
+const layers = `┌─ layer 3 ─ environment scrubbing ─────────────────────────┐
+│  *_TOKEN · *_KEY · *_SECRET · *_PASSWORD · *AUTH* · *COOKIE* │
+│  dropped before the child process ever starts                │
+├─ layer 2 ─ kernel sandbox (strict) ─────────────────────────┤
+│  macOS sandbox-exec / linux bwrap                            │
+│  write: workspace only        read: everything but ~/.ssh,   │
+│  network: on (--no-network)          ~/.aws, ~/.gnupg, …     │
+├─ layer 1 ─ path jail (always on) ───────────────────────────┤
+│  resolve → realpath → must start with the workspace root     │
+│  ../../etc/passwd  ✗   ~/project/sand1/main.py  ✓           │
+└──────────────────────────────────────────────────────────────┘`;
+
+const smoke = [
+  { text: "npm run smoke", kind: "cmd" as const },
+  { text: "27 / 27 passing", kind: "ok" as const },
+  { text: "kernel sandbox blocks writes outside workspace", kind: "ok" as const },
+  { text: "kernel sandbox blocks reading ~/.ssh", kind: "ok" as const },
+  { text: "credential env vars are scrubbed", kind: "ok" as const },
+  { text: "npm install works inside sandbox", kind: "ok" as const },
+  { text: "path escapes rejected in every tool", kind: "ok" as const },
+];
+
+const blocked = [
+  "~/.ssh", "~/.aws", "~/.gnupg", "~/.kube", "~/.docker/config.json",
+  "~/.config/gh", "~/.netrc", "~/.npmrc", "~/.pypirc",
+];
+---
+
+<Base title="sandbox" description="Three independent sandbox layers: path jail, kernel sandbox via sandbox-exec/bwrap, and credential environment scrubbing.">
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <pre class="ascii-h" aria-label="sandbox">{head}</pre>
+        <p class="section-sub">three independent layers, all on by default</p>
+      </div>
+
+      <div class="reveal" style="--d:.05s">
+        <div class="diagram"><pre>{layers}</pre></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head reveal">
+          <p class="section-sub">verified behaviour, from the smoke test</p>
+        </div>
+        <div class="reveal" style="--d:.08s">
+          <Terminal title="npm run smoke — 27/27" lines={smoke} static />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head reveal">
+          <p class="section-sub">what the kernel layer blocks from being read</p>
+        </div>
+        <div class="cards reveal" style="--d:.05s">
+          {blocked.map((p) => (
+            <div class="card"><span class="icon">✗ read</span><h3><code style="font-size:12.5px">{p}</code></h3></div>
+          ))}
+        </div>
+        <p class="mono-note reveal" style="margin-top:12px">
+          env inside the sandbox is redirected — TMPDIR, XDG_CACHE_HOME and the npm cache point into
+          the workspace, so nothing leaks to ~/.npm or ~/Library/Caches.
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-head reveal">
+          <p class="section-sub">modes, when you need to loosen</p>
+        </div>
+        <div class="table-wrap reveal" style="--d:.05s">
+          <table class="table">
+            <thead>
+              <tr><th>mode</th><th>path jail</th><th>kernel sandbox</th><th>use when</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>strict</code> · default</td><td>✅</td><td>✅</td><td>normal use — untrusted or exploratory work</td></tr>
+              <tr><td><code>workspace</code></td><td>✅</td><td>❌</td><td>the toolchain fights the kernel profile (Docker, some IDEs)</td></tr>
+              <tr><td><code>off</code></td><td>❌</td><td>❌</td><td>throwaway VM only</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mono-note reveal" style="margin-top:12px">
+          a tool inside the sandbox can check its own confinement:
+          <code>sandbox_selftest</code> probes the layers and reports pass/fail at runtime.
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-head reveal">
+          <p class="section-sub">one credential, explicitly allowed</p>
+        </div>
+        <div class="reveal" style="--d:.05s">
+          <div class="term static">
+            <div class="term-bar">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="term-title">allow one var by name — never by value</span>
+            </div>
+            <pre class="term-body">❯ TERMINAL_MCP_PASS_ENV=SSH_AUTH_SOCK,NPM_TOKEN terminal-mcp
+   → passing through: SSH_AUTH_SOCK, NPM_TOKEN</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

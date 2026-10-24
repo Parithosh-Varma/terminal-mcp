@@ -1,0 +1,22 @@
+---
+import Base from "../layouts/Base.astro";
+import { art } from "../lib/art";
+
+const art404 = art("404", "ANSI Shadow");
+---
+
+<Base title="404" description="Page not found.">
+  <section class="hero">
+    <div class="wrap" style="text-align:left">
+      <pre class="ascii-404" aria-label="404">{art404}</pre>
+      <p class="hero-sub" style="margin-top:18px">
+        segmentation fault (core dumped) — this path resolved outside the sandbox.
+      </p>
+      <div class="cta-row">
+        <a class="btn primary" href="/">cd ~ ❯</a>
+        <a class="btn ghost" href="/tools">ls tools/</a>
+        <a class="btn ghost" href="/relay">cat relay/README</a>
+      </div>
+    </div>
+  </section>
+</Base>

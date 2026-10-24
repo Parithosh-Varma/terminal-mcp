@@ -384,8 +384,11 @@ bin/terminal-mcp      global launcher (`terminal-mcp`, `stdio`, `http`, `relay`)
     shell.ts files.ts search.ts git.ts net.ts system.ts data.ts meta.ts
   relay-agent.ts      Mac-side outbound agent for the Cloudflare Worker relay
 scripts/smoke.ts      end-to-end test over stdio
-site/index.html       landing page (terminal-mcp.pages.dev)
-wrangler.jsonc        Pages project config
+site/                 landing site (Astro, deployed to terminal-mcp.pages.dev)
+  src/pages/          home · tools · sandbox · relay · 404
+  src/components/     nav, footer, typing terminal, live status pill
+  src/lib/art.ts      ASCII art rendered at build time (figlet)
+wrangler.jsonc        Pages project config (build output: site/dist)
 worker/
   src/index.ts        Worker entry: auth, landing page, routing
   src/relay.ts        Durable Object holding the WebSocket to the Mac

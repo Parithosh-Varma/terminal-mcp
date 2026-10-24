@@ -1,0 +1,26 @@
+---
+const path = Astro.url.pathname.replace(/\/$/, "") || "/";
+const links = [
+  { href: "/", label: "home" },
+  { href: "/tools", label: "tools" },
+  { href: "/sandbox", label: "sandbox" },
+  { href: "/relay", label: "relay" },
+];
+const current = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+---
+
+<nav class="nav">
+  <div class="wrap nav-inner">
+    <a class="logo" href="/">terminal-mcp</a>
+    <div class="nav-links">
+      {links.map((l) => (
+        <a href={l.href} class:l.hide-sm={l.href !== "/relay"} aria-current={current(l.href) ? "page" : undefined}>
+          {l.label}
+        </a>
+      ))}
+      <a class="nav-cta" href="https://github.com/Parithosh-Varma/terminal-mcp" target="_blank" rel="noopener">
+        github ↗
+      </a>
+    </div>
+  </div>
+</nav>

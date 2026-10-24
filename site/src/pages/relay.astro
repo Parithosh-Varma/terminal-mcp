@@ -1,0 +1,122 @@
+---
+import Base from "../layouts/Base.astro";
+import StatusPill from "../components/StatusPill.astro";
+import { art } from "../lib/art";
+import { RELAY } from "../data/site";
+
+const head = art("relay", "Small Slant");
+
+const arch = `  ChatGPT / claude.ai
+        │  HTTPS · streamable MCP · token in the URL
+        ▼
+┌─────────────────────────────┐
+│  Cloudflare Worker          │   fails closed: no token → 401
+│  ┌───────────────────────┐  │
+│  │ Durable Object        │  │   holds one hibernatable WebSocket,
+│  │ · newest live socket  │  │   routes only to sockets that
+│  │ · 90s liveness window │  │   pinged in the last 90s
+│  └───────────────────────┘  │
+└──────────────┬──────────────┘
+               │  WebSocket — your Mac dials OUT
+               ▼
+┌─────────────────────────────┐      ┌────────────────────────┐
+│  terminal-mcp (localhost)   │      │  Claude Desktop / Code │
+│  · 127.0.0.1:8787           │◄─────│  spawn stdio directly  │
+│  · no token on loopback     │ stdio└────────────────────────┘
+└──────────────┬──────────────┘
+               │  sandbox-exec / bwrap
+               ▼
+        sand1 · sand2 · sand3 …`;
+---
+
+<Base title="relay" description="Connect hosted ChatGPT to your own Mac through a Cloudflare Worker relay — your machine dials out, nothing listens inbound.">
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <pre class="ascii-h" aria-label="relay">{head}</pre>
+        <p class="section-sub">hosted ChatGPT ⇄ Cloudflare ⇄ your Mac — no inbound ports</p>
+      </div>
+
+      <div class="reveal" style="--d:.05s">
+        <div class="diagram"><pre>{arch}</pre></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head reveal">
+          <p class="section-sub">live status of this deployment</p>
+        </div>
+        <div class="grid-2">
+          <div class="reveal" style="--d:.05s"><StatusPill variant="card" /></div>
+          <div class="card reveal" style="--d:.1s">
+            <span class="icon">§</span>
+            <h3>connector URL</h3>
+            <p>paste into ChatGPT → Settings → Connectors → Advanced → Developer mode, auth <b>None</b>:</p>
+            <p style="margin-top:10px"><code style="font-size:12px; word-break:break-all">{RELAY}/mcp?token=…</code></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head reveal">
+          <p class="section-sub">run your own, start to finish</p>
+        </div>
+        <div class="steps">
+          <div class="step reveal">
+            <h3>deploy the worker</h3>
+            <p>one Durable Object, one shared secret. wrangler prints your URL.</p>
+            <pre>git clone https://github.com/Parithosh-Varma/terminal-mcp
+cd terminal-mcp/worker && npm install
+npx wrangler login
+npx wrangler secret put RELAY_TOKEN   # long random secret
+npx wrangler deploy</pre>
+          </div>
+          <div class="step reveal" style="--d:.06s">
+            <h3>save the URL once</h3>
+            <p>the repo stays shareable — nothing personal is hardcoded, it all lives in state/ (gitignored).</p>
+            <pre>echo "https://&lt;your&gt;.workers.dev"  &gt; state/relay-url
+echo "&lt;the same secret&gt;"            &gt; state/relay-token
+chmod 600 state/relay-token</pre>
+          </div>
+          <div class="step reveal" style="--d:.12s">
+            <h3>start everything with one command</h3>
+            <p>local MCP server + relay agent, one lifecycle. A second launch detects the first and exits.</p>
+            <pre>terminal-mcp</pre>
+          </div>
+          <div class="step reveal" style="--d:.18s">
+            <h3>connect the clients</h3>
+            <p>ChatGPT uses the relay URL; Claude Desktop and Claude Code spawn the server over stdio — no URL needed.</p>
+            <pre>ChatGPT:      https://&lt;your&gt;.workers.dev/mcp?token=&lt;secret&gt;   auth: None
+Claude Code:  claude mcp add terminal-mcp -- terminal-mcp stdio
+Desktop:      ~/Library/Application Support/Claude/claude_desktop_config.json</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head reveal">
+          <p class="section-sub">rules the relay enforces</p>
+        </div>
+        <div class="table-wrap reveal" style="--d:.05s">
+          <table class="table">
+            <thead><tr><th>rule</th><th>why</th></tr></thead>
+            <tbody>
+              <tr><td>token required, always</td><td>a relay without a secret would be an open shell on your Mac</td></tr>
+              <tr><td>newest live socket only</td><td>competing or dead agents can never swallow a request</td></tr>
+              <tr><td>90-second liveness window</td><td>zombie sockets fail fast with a 503 instead of hanging</td></tr>
+              <tr><td>token travels in env, not argv</td><td>so it never appears in <code>ps</code> output</td></tr>
+              <tr><td>one supervisor per machine</td><td>two agents would evict each other's socket forever</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section reveal">
+        <div class="callout">
+          <b>the URL is a credential.</b> Anyone holding
+          <code>?token=…</code> can run commands inside the workspace — scope the Cloudflare token,
+          rotate the relay secret if it leaks, and pair untrusted work with <code>--no-network</code>.
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

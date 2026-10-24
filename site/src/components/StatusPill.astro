@@ -1,0 +1,84 @@
+---
+/**
+ * Live relay status. Polls the Worker's /health (CORS-open) and reflects
+ * whether the local agent is connected.
+ */
+interface Props {
+  variant?: "pill" | "card";
+}
+const { variant = "pill" } = Astro.props;
+import { HEALTH } from "../data/site";
+---
+
+{variant === "pill" ? (
+  <span class="pill" data-status data-variant="pill">
+    <span class="dot"></span>
+    <span data-state>checking relay…</span>
+  </span>
+) : (
+  <div class="card" data-status data-variant="card" style="padding:20px">
+    <span class="icon">● relay</span>
+    <h3 data-state>checking relay…</h3>
+    <p>
+      agent <b data-agents>–</b> · since <b data-since>–</b> · version <b data-version>–</b> ·
+      pending <b data-pending>–</b>
+    </p>
+    <p class="mono-note" style="margin-top:8px">{HEALTH}</p>
+  </div>
+)}
+
+<script>
+  function initStatus() {
+    const el = document.querySelector<HTMLElement>("[data-status]");
+    if (!el || el.dataset.bound) return;
+    el.dataset.bound = "1";
+
+    const $ = (sel: string) => el.querySelector<HTMLElement>(sel);
+    const state = $("[data-state]");
+    const dot = $(".dot");
+
+    async function poll() {
+      try {
+        const res = await fetch("https://terminal-mcp-relay.parithosh.workers.dev/health", {
+          cache: "no-store",
+        });
+        const data = (await res.json()) as {
+          online: boolean;
+          agents: number;
+          connectedSince: string | null;
+          agentVersion: string | null;
+          pending: number;
+        };
+        el.classList.toggle("on", !!data.online);
+        dot?.classList.toggle("on", !!data.online);
+        if (state) {
+          state.textContent = data.online
+            ? el.dataset.variant === "card"
+              ? "connected — the Mac agent is live"
+              : "agent online"
+            : "agent offline — run terminal-mcp";
+        }
+        const set = (sel: string, v: string) => {
+          const n = $(sel);
+          if (n) n.textContent = v;
+        };
+        set("[data-agents]", String(data.agents));
+        set("[data-pending]", String(data.pending));
+        set("[data-version]", data.agentVersion ?? "–");
+        set(
+          "[data-since]",
+          data.connectedSince ? new Date(data.connectedSince).toLocaleTimeString() : "–",
+        );
+      } catch {
+        el.classList.remove("on");
+        dot?.classList.remove("on");
+        if (state) state.textContent = "relay unreachable";
+      }
+    }
+
+    poll();
+    setInterval(poll, 10_000);
+  }
+
+  document.addEventListener("astro:page-load", initStatus);
+</script>

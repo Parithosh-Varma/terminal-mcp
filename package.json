@@ -22,7 +22,9 @@
     "serve:json": "node dist/index.js --http --port 8787 --json-response",
     "worker:dev": "npm --prefix worker run dev",
     "worker:deploy": "npm --prefix worker run deploy",
-    "pages:deploy": "wrangler pages deploy site --project-name terminal-mcp --branch main",
+    "site:dev": "npm --prefix site run dev",
+    "site:build": "npm --prefix site run build",
+    "pages:deploy": "npm run site:build && wrangler pages deploy site/dist --project-name terminal-mcp --branch main",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "deploy": "wrangler deploy",
     "preview": "wrangler dev"
