@@ -12,12 +12,12 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
 URL="${RELAY_URL:-https://terminal-mcp-relay.parithosh.workers.dev}"
-TOKEN="${RELAY_TOKEN:-$(cat "$HOME/.terminal-mcp/relay-token" 2>/dev/null || true)}"
+TOKEN="${RELAY_TOKEN:-$(cat "$DIR/state/relay-token" 2>/dev/null || true)}"
 PORT="${PORT:-8787}"
-ROOT="${TERMINAL_MCP_ROOT:-$HOME/mcp-workspace}"
+ROOT="${TERMINAL_MCP_ROOT:-$DIR/workspace}"
 
 if [[ -z "$TOKEN" ]]; then
-  echo "No relay token. Set RELAY_TOKEN or write it to ~/.terminal-mcp/relay-token" >&2
+  echo "No relay token. Set RELAY_TOKEN or write it to $DIR/state/relay-token" >&2
   exit 1
 fi
 

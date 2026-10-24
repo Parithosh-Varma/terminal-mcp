@@ -32,7 +32,7 @@ export function registerShellTools(server: McpServer): void {
       description:
         "Execute a shell command inside the sandboxed workspace and return its stdout, stderr, exit code and duration. " +
         "Use this for builds, tests, package managers, CLI tools, scripts and anything else that runs on the machine. " +
-        "Commands are confined to the sandbox root (default ~/mcp-workspace). Long outputs are truncated in the middle.",
+        "Commands are confined to the sandbox root (default ./workspace). Long outputs are truncated in the middle.",
       inputSchema: {
         command: z.string().min(1).describe("Shell command line to execute, e.g. `npm test` or `git status`."),
         cwd: cwdArg,

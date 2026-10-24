@@ -41,9 +41,9 @@ Any unrecognised flags are passed straight to the server, e.g.
 
 Environment used by `terminal-mcp`:
   RELAY_URL         worker base URL (default the deployed relay)
-  RELAY_TOKEN       relay secret (default ~/.terminal-mcp/relay-token)
+  RELAY_TOKEN       relay secret (default ./state/relay-token)
   PORT              local HTTP port (default 8787)
-  TERMINAL_MCP_ROOT workspace to confine the agent to (default ~/mcp-workspace)
+  TERMINAL_MCP_ROOT workspace to confine the agent to (default ./workspace)
 EOF
 }
 

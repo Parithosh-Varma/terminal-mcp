@@ -16,7 +16,7 @@ Usage:
   terminal-mcp --http [options]          serve MCP over streamable HTTP at /mcp
 
 Core options:
-  --root <dir>          workspace the agent is confined to (default ~/mcp-workspace)
+  --root <dir>          workspace the agent is confined to (default ./workspace)
   --sandbox <mode>      strict | workspace | off   (default strict)
   --no-network          deny network access to sandboxed commands
   --timeout <ms>        default command timeout

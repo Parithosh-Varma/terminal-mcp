@@ -8,7 +8,7 @@ command is confined to a workspace folder — the model gets a real terminal wit
 
 ```
 ┌──────────────┐   MCP    ┌────────────────┐   sandbox-exec    ┌─────────────────────┐
-│ Claude / GPT │ ───────► │  terminal-mcp  │ ────────────────► │  ~/mcp-workspace    │
+│ Claude / GPT │ ───────► │  terminal-mcp  │ ────────────────► │  ./workspace/       │
 └──────────────┘ stdio/http└────────────────┘  (kernel profile) └─────────────────────┘
 ```
 
@@ -41,6 +41,18 @@ npm run smoke               # 26 checks
 SMOKE_NPM=1 npm run smoke   # also proves npm install works inside the sandbox
 ```
 
+Everything the server creates stays inside this folder:
+
+```
+terminal-mcp/
+├── src/  dist/  worker/  bin/  scripts/      code
+├── workspace/                               sandbox root — the only place commands can touch
+└── state/                                   audit.log, relay-token (gitignored, never committed)
+```
+
+Both `workspace/` and `state/` are created on first run and are gitignored. Move them with
+`TERMINAL_MCP_HOME` (both), `--root` / `TERMINAL_MCP_ROOT` (workspace only) or `TERMINAL_MCP_STATE`.
+
 ---
 
 ## Connecting clients
@@ -48,7 +60,7 @@ SMOKE_NPM=1 npm run smoke   # also proves npm install works inside the sandbox
 ### Claude Code
 
 ```bash
-claude mcp add terminal-mcp -- node "$(pwd)/dist/index.js" --root "$HOME/mcp-workspace"
+claude mcp add terminal-mcp -- node "$(pwd)/dist/index.js" --root "$(pwd)/workspace"
 claude mcp list
 ```
 
@@ -64,7 +76,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "args": [
         "/Users/you/terminal-mcp/dist/index.js",
         "--root",
-        "/Users/varma/mcp-workspace"
+        "/Users/you/terminal-mcp/workspace"
       ]
     }
   }
@@ -118,7 +130,7 @@ Equivalent to doing it by hand in two terminals:
 
 ```bash
 npm run serve:json
-npm run relay -- --url https://terminal-mcp.<subdomain>.workers.dev --token "$(cat ~/.terminal-mcp/relay-token)"
+npm run relay -- --url https://terminal-mcp.<subdomain>.workers.dev --token "$(cat ./state/relay-token)"
 ```
 
 Check it: `curl https://<worker>/health` → `{"online":true,...}`, and open `https://<worker>/` for a status page.
@@ -156,7 +168,7 @@ resolved to their real target, and anything landing outside the root is rejected
 
 ```
 Path escapes the sandbox: ../../etc/passwd
-Sandbox root: /Users/varma/mcp-workspace
+Sandbox root: /Users/you/terminal-mcp/workspace
 Resolved to:  /Users/etc/passwd
 ```
 
@@ -190,7 +202,7 @@ Environment inside the sandbox is redirected so tools stay contained: `TMPDIR`, 
 | `off` | ❌ | ❌ | throwaway VM only |
 
 ```bash
-node dist/index.js --root ~/mcp-workspace --sandbox workspace
+node dist/index.js --root ./workspace --sandbox workspace
 ```
 
 `sandbox_selftest` actively probes the confinement and reports pass/fail at runtime.
@@ -239,7 +251,7 @@ node dist/index.js --root ~/mcp-workspace --sandbox workspace
 ### Meta — 5
 `sandbox_info` `sandbox_selftest` `command_history` `clear_history` `list_capabilities`
 
-`command_history` reads an append-only JSONL audit log at `~/.terminal-mcp/audit.log` — deliberately
+`command_history` reads an append-only JSONL audit log at `./state/audit.log` — deliberately
 **outside** the workspace so the agent cannot erase its own tracks.
 
 ---
@@ -249,7 +261,7 @@ node dist/index.js --root ~/mcp-workspace --sandbox workspace
 ```
 terminal-mcp [--stdio] [--http] [options]
 
-  --root <dir>        workspace to confine the agent to   (default ~/mcp-workspace)
+  --root <dir>        workspace to confine the agent to   (default ./workspace)
   --sandbox <mode>    strict | workspace | off            (default strict)
   --no-network        deny network to sandboxed commands
   --timeout <ms>      default command timeout             (default 120000)

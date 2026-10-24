@@ -3,3 +3,7 @@ dist/
 .tmp/
 *.log
 .DS_Store
+
+# Everything the server creates for you
+workspace/
+state/

@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type SandboxMode = "strict" | "workspace" | "off";
 
@@ -27,8 +27,13 @@ function splitList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+// Everything lives in one folder: <project>/workspace (sandbox) and <project>/state (audit, token).
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const home = path.resolve(process.env.TERMINAL_MCP_HOME ?? projectRoot);
+const stateDir = path.resolve(process.env.TERMINAL_MCP_STATE ?? path.join(home, "state"));
+
 const root = path.resolve(
-  arg("root") ?? process.env.TERMINAL_MCP_ROOT ?? path.join(os.homedir(), "mcp-workspace"),
+  arg("root") ?? process.env.TERMINAL_MCP_ROOT ?? path.join(home, "workspace"),
 );
 
 const rawMode = (arg("sandbox") ?? process.env.TERMINAL_MCP_SANDBOX ?? "strict").toLowerCase();
@@ -37,6 +42,7 @@ const mode: SandboxMode = rawMode === "workspace" || rawMode === "off" ? rawMode
 export const config = {
   transport: (hasFlag("http") || arg("transport") === "http" ? "http" : "stdio") as "stdio" | "http",
   root,
+  stateDir,
   mode,
   allowNetwork: !(hasFlag("no-network") || process.env.TERMINAL_MCP_NETWORK === "0"),
   stateless: hasFlag("stateless"),
@@ -48,7 +54,7 @@ export const config = {
   token: arg("token") ?? process.env.TERMINAL_MCP_TOKEN ?? "",
   defaultTimeoutMs: Number(process.env.TERMINAL_MCP_TIMEOUT_MS ?? 120_000),
   maxOutputChars: Number(process.env.TERMINAL_MCP_MAX_OUTPUT ?? 60_000),
-  auditPath: path.join(os.homedir(), ".terminal-mcp", "audit.log"),
+  auditPath: path.join(stateDir, "audit.log"),
 };
 
 export function ensureDirs(): void {
